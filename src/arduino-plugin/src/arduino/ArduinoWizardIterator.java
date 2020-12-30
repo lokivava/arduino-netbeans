@@ -5,15 +5,15 @@
  */
 package arduino;
 
+import arduino.files.ConfigurationsFileFilter;
+import arduino.files.FileFilter;
+import arduino.files.MakefileFilter;
+import arduino.files.NoFilter;
+import arduino.files.ProjectFileFilter;
 import java.awt.Component;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.text.MessageFormat;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
@@ -30,14 +30,8 @@ import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.NbBundle.Messages;
-import org.openide.xml.XMLUtil;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 
 // TODO define position attribute
 @TemplateRegistration(folder = "Project/Arduino", displayName = "#Arduino_displayName", description = "ArduinoDescription.html", iconBase = "arduino/Arduino.png", content = "ArduinoProject.zip")
@@ -172,111 +166,30 @@ public class ArduinoWizardIterator implements WizardDescriptor./*Progress*/Insta
                 if (entry.isDirectory()) {
                     FileUtil.createFolder(projectRoot, entry.getName());
                 } else {
-                    FileObject fo = FileUtil.createData(projectRoot, entry.getName());
-                    
-                    /*try (PrintWriter pw = new PrintWriter(new FileOutputStream(new File("/home/jaques/arduino-netbeans.log"),true))) {
-                        pw.println(entry.getName());
-                    }*/
-                                        
-                    if ("nbproject/project.xml".equals(entry.getName())) {
-                        // Special handling for setting name of Ant-based projects; customize as needed:
-                        filterProjectXML(fo, str, projectRoot.getName());
-                    } else if ("Makefile".equals(entry.getName())) {
-                        filterMakefile(fo, str, wiz);
-                    } else {
-                        writeFile(str, fo);
+                    FileFilter filter;
+                    if (null == entry.getName())
+                        filter = new NoFilter();
+                    else switch (entry.getName())
+                    {
+                        case "nbproject/project.xml":
+                            // Special handling for setting name of Ant-based projects; customize as needed:
+                            filter = new ProjectFileFilter(projectRoot.getName());
+                            break;
+                        case "nbproject/configurations.xml":
+                            filter = new ConfigurationsFileFilter(wiz);
+                            break;
+                        case "Makefile":
+                            filter = new MakefileFilter(wiz);
+                            break;
+                        default:
+                            filter = new NoFilter();
+                            break;
                     }
+                    filter.filter(FileUtil.createData(projectRoot, entry.getName()), str);
                 }
             }
         } finally {
             source.close();
         }
     }
-
-    private static void writeFile(ZipInputStream str, FileObject fo) throws IOException {
-        OutputStream out = fo.getOutputStream();
-        try {
-            FileUtil.copy(str, out);
-        } finally {
-            out.close();
-        }
-    }
-
-    private static void filterProjectXML(FileObject fo, ZipInputStream str, String name) throws IOException {
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            FileUtil.copy(str, baos);
-            Document doc = XMLUtil.parse(new InputSource(new ByteArrayInputStream(baos.toByteArray())), false, false, null, null);
-            NodeList nl = doc.getDocumentElement().getElementsByTagName("name");
-            if (nl != null) {
-                for (int i = 0; i < nl.getLength(); i++) {
-                    Element el = (Element) nl.item(i);
-                    if (el.getParentNode() != null && "data".equals(el.getParentNode().getNodeName())) {
-                        NodeList nl2 = el.getChildNodes();
-                        if (nl2.getLength() > 0) {
-                            nl2.item(0).setNodeValue(name);
-                        }
-                        break;
-                    }
-                }
-            }
-            OutputStream out = fo.getOutputStream();
-            try {
-                XMLUtil.write(doc, out, "UTF-8");
-            } finally {
-                out.close();
-            }
-        } catch (Exception ex) {
-            Exceptions.printStackTrace(ex);
-            writeFile(str, fo);
-        }
-
-    }
-    
-    private static void filterMakefile(FileObject fo, ZipInputStream str, WizardDescriptor wiz) throws IOException {
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            FileUtil.copy(str, baos);
-                           
-            try (PrintWriter pw = new PrintWriter(new FileOutputStream(new File(fo.getPath()),true))) {                
-                pw.print("COM_PORT = ");
-                pw.println(wiz.getProperty("comport"));
-                
-                pw.println("BAUD_RATE = 115200");
-                pw.println("ARDUINO_VERSION = 167");
-                                
-                pw.print("ARDUINO_BASE_DIR = ");
-                String basedir = wiz.getProperty("basedir").toString().trim().replaceAll("\\\\", "/");
-                pw.println(basedir);  
-                
-                pw.print("INCLUDE_LIBS = ");
-                String libraries = wiz.getProperty("libraries").toString().trim().replaceAll("\r", "").replace("\n", "");
-                if (libraries.isEmpty()) {
-                    pw.println("Firmata;");
-                } else {
-                    pw.println(libraries);
-                }
-                
-                if (wiz.getProperty("board").equals("Arduino Mega 2560")) {
-                    pw.println("ARDUINO_MODEL = atmega2560");
-                    pw.println("ARDUINO_PROGRAMMER = wiring");
-                    pw.println("ARDUINO_PINS_DIR = ${ARDUINO_BASE_DIR}/hardware/arduino/avr/variants/mega");
-                    
-                } else { //Arduino Uno:
-                    pw.println("ARDUINO_MODEL = atmega328p");
-                    pw.println("ARDUINO_PROGRAMMER = arduino");
-                    pw.println("ARDUINO_PINS_DIR = ${ARDUINO_BASE_DIR}/hardware/arduino/avr/variants/standard");
-                }
-                
-                pw.println();
-                pw.println(baos.toString());
-            }            
-            
-        } catch (Exception ex) {
-            Exceptions.printStackTrace(ex);
-            writeFile(str, fo);
-        }
-
-    }
-
 }

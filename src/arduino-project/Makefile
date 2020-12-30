@@ -32,7 +32,9 @@ AVR_DUDE = ${ARDUINO_BASE_DIR}/hardware/tools/avr/bin/avrdude -C ${ARDUINO_BASE_
 INCLUDE = -c -g \
 -I${ARDUINO_CORE_DIR} \
 -I${ARDUINO_PINS_DIR} \
-$(patsubst %,-I${ARDUINO_LIB_DIR}/%,$(subst ;, ,$(INCLUDE_LIBS)))
+$(patsubst %,-I${ARDUINO_LIB_DIR}/%,$(subst ;, ,$(INCLUDE_LIBS))) \
+$(patsubst %,-I${ARDUINO_CORE_LIB}/%/src,$(subst ;, ,$(CORE_LIBS)))
+
 
 FLAGS_GCC = -c -g -Os -Wall -ffunction-sections -fdata-sections -mmcu=${ARDUINO_MODEL} -DF_CPU=16000000L -MMD -DUSB_VID=null -DUSB_PID=null -DARDUINO=${ARDUINO_VERSION}
 FLAGS_GPP = ${FLAGS_GCC} -fno-exceptions
